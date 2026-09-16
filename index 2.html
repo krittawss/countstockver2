@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ระบบตรวจนับสต็อกสินค้า</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --bg: #F5F3EE;
+    --panel: #FFFFFF;
+    --panel-2: #ECE9E2;
+    --ink: #1C1E1B;
+    --ink-dim: #63665F;
+    --border: #D8D4C8;
+    --amber: #E8963C;
+    --amber-ink: #7A4E10;
+    --teal: #2E8F82;
+    --teal-ink: #124B44;
+    --rust: #C6512E;
+    --rust-ink: #7A3018;
+    --focus: #1C1E1B;
+    --shadow: none;
+    --scan-glow: rgba(232,150,60,.35);
+  }
+  html[data-theme="dark"]{
+    --bg: #14161A;
+    --panel: #1C1F24;
+    --panel-2: #23262C;
+    --ink: #EDEBE4;
+    --ink-dim: #96988F;
+    --border: #33363D;
+    --amber: #F0A94E;
+    --amber-ink: #FFDCA0;
+    --teal: #4FB7A8;
+    --teal-ink: #B4EBE1;
+    --rust: #E36A48;
+    --rust-ink: #FFC9B4;
+    --focus: #F0A94E;
+    --scan-glow: rgba(240,169,78,.28);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans Thai','Noto Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    transition:background .2s ease,color .2s ease;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  *:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+  .wrap{max-width:1040px;margin:0 auto;padding:20px 16px 64px;}
+
+  /* Header */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{width:34px;height:34px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;}
+  html[data-theme="dark"] .brand-mark{background:var(--amber);color:#14161A;}
+  .brand h1{font-size:16px;font-weight:700;margin:0;line-height:1.2;}
+  .brand p{font-size:11.5px;color:var(--ink-dim);margin:0;letter-spacing:.01em;}
+  .icon-btn{width:38px;height:38px;border-radius:9px;border:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:center;color:var(--ink);transition:border-color .15s;}
+  .icon-btn:hover{border-color:var(--ink-dim);}
+  .topbar-actions{display:flex;gap:8px;}
+
+  /* Stat cluster - single joined panel, not separate cards */
+  .stats{
+    display:grid;grid-template-columns:1fr 1fr 1fr;
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    background:var(--panel);
+    margin-bottom:20px;
+  }
+  .stat{
+    padding:16px 14px;
+    border-right:1px solid var(--border);
+    text-align:left;
+    background:transparent;
+    display:flex;flex-direction:column;gap:4px;
+    position:relative;
+    transition:background .15s;
+  }
+  .stat:last-child{border-right:none;}
+  .stat:hover{background:var(--panel-2);}
+  .stat.active{background:var(--panel-2);}
+  .stat.active::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+  }
+  .stat[data-key="all"].active::after{background:var(--ink);}
+  html[data-theme="dark"] .stat[data-key="all"].active::after{background:var(--amber);}
+  .stat[data-key="counted"].active::after{background:var(--teal);}
+  .stat[data-key="pending"].active::after{background:var(--rust);}
+  .stat .num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;line-height:1;}
+  .stat .lbl{font-size:12px;color:var(--ink-dim);}
+  .stat[data-key="counted"] .num{color:var(--teal-ink);}
+  .stat[data-key="pending"] .num{color:var(--rust-ink);}
+
+  /* Scanner panel - the hero */
+  .scanner{
+    border:1px solid var(--border);border-radius:14px;background:var(--panel);
+    padding:18px;margin-bottom:20px;
+  }
+  .scanner-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap;}
+  .scanner-head h2{font-size:14px;font-weight:700;margin:0;}
+  .scan-toggle{
+    display:flex;gap:6px;background:var(--panel-2);padding:3px;border-radius:9px;border:1px solid var(--border);
+  }
+  .scan-toggle button{
+    border:none;background:transparent;padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink-dim);
+  }
+  .scan-toggle button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 0 var(--border);}
+
+  #reader-wrap{display:none;position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3;max-width:420px;margin:0 auto 12px;}
+  #reader-wrap.show{display:block;}
+  #reader{width:100%;height:100%;}
+  #reader video{width:100%!important;height:100%!important;object-fit:cover;}
+  .scan-frame{position:absolute;inset:14%;border:2px solid var(--amber);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25);pointer-events:none;overflow:hidden;}
+  .scan-line{
+    position:absolute;left:4%;right:4%;height:2px;top:8%;
+    background:linear-gradient(90deg, transparent, var(--amber) 20%, var(--amber) 80%, transparent);
+    box-shadow:0 0 10px 1px var(--scan-glow);
+    animation:scanmove 1.5s ease-in-out infinite;
+  }
+  @keyframes scanmove{
+    0%{top:6%;}
+    50%{top:92%;}
+    100%{top:6%;}
+  }
+  .cam-controls{display:flex;justify-content:center;gap:8px;margin-bottom:12px;}
+  .pill-btn{
+    border:1px solid var(--border);background:var(--panel-2);color:var(--ink);
+    padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;
+  }
+  .pill-btn:hover{border-color:var(--ink-dim);}
+
+  .manual-row{display:flex;gap:8px;}
+  .manual-row input{
+    flex:1;border:1px solid var(--border);background:var(--bg);color:var(--ink);
+    border-radius:9px;padding:11px 13px;font-size:14px;font-family:'JetBrains Mono',monospace;
+  }
+  .manual-row input::placeholder{font-family:'Noto Sans Thai',sans-serif;color:var(--ink-dim);}
+  .go-btn{
+    background:var(--ink);color:var(--bg);border:none;border-radius:9px;padding:0 20px;font-weight:700;font-size:13.5px;
+  }
+  html[data-theme="dark"] .go-btn{background:var(--amber);color:#14161A;}
+  .go-btn:active{transform:translateY(1px);}
+
+  /* Feedback banner */
+  #feedback{
+    display:none;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-top:12px;font-size:13.5px;font-weight:600;
+  }
+  #feedback.show{display:flex;}
+  #feedback.ok{background:color-mix(in srgb, var(--teal) 16%, var(--panel));color:var(--teal-ink);border:1px solid color-mix(in srgb, var(--teal) 45%, var(--border));}
+  #feedback.warn{background:color-mix(in srgb, var(--amber) 18%, var(--panel));color:var(--amber-ink);border:1px solid color-mix(in srgb, var(--amber) 45%, var(--border));}
+  #feedback.err{background:color-mix(in srgb, var(--rust) 16%, var(--panel));color:var(--rust-ink);border:1px solid color-mix(in srgb, var(--rust) 45%, var(--border));}
+
+  /* Table section */
+  .table-head{display:flex;align-items:center;justify-content:space-between;margin:26px 0 10px;gap:8px;flex-wrap:wrap;}
+  .table-head h2{font-size:14px;font-weight:700;margin:0;}
+  .table-head .count-tag{font-size:11.5px;color:var(--ink-dim);}
+  .reset-btn{
+    border:1px solid var(--border);background:var(--panel);color:var(--rust-ink);
+    padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:700;
+  }
+  .reset-btn:hover{border-color:var(--rust);}
+
+  .table-shell{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--panel);}
+  .table-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;min-width:560px;}
+  thead th{
+    text-align:left;font-size:11px;font-weight:700;color:var(--ink-dim);
+    padding:11px 14px;border-bottom:1px solid var(--border);background:var(--panel-2);
+    position:sticky;top:0;
+  }
+  tbody td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--panel-2);}
+  .code-cell{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink-dim);}
+  .time-cell{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-dim);white-space:nowrap;}
+  .status-chip{
+    display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;
+  }
+  .status-chip.counted{background:color-mix(in srgb, var(--teal) 16%, transparent);color:var(--teal-ink);}
+  .status-chip.pending{background:color-mix(in srgb, var(--rust) 12%, transparent);color:var(--rust-ink);}
+  .status-chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .empty-state{padding:48px 20px;text-align:center;color:var(--ink-dim);font-size:13.5px;}
+
+  /* Modal */
+  .modal-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(10,10,10,.5);z-index:50;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .modal-backdrop.show{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:380px;width:100%;}
+  .modal h3{margin:0 0 8px;font-size:15px;}
+  .modal p{margin:0 0 18px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .btn-ghost{border:1px solid var(--border);background:transparent;color:var(--ink);padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;}
+  .btn-danger{border:none;background:var(--rust);color:#fff;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:700;}
+
+  .modal label{display:block;font-size:12.5px;font-weight:600;margin:10px 0 5px;}
+  .modal input[type=text],.modal input[type=url]{
+    width:100%;border:1px solid var(--border);background:var(--bg);color:var(--ink);
+    border-radius:8px;padding:9px 11px;font-size:13px;font-family:'JetBrains Mono',monospace;
+  }
+  .hint{font-size:11.5px;color:var(--ink-dim);margin-top:6px;line-height:1.5;}
+
+  .toast-audio{display:none;}
+  @media (max-width:520px){
+    .stat .num{font-size:21px;}
+    .stat{padding:13px 10px;}
+    thead th:nth-child(1),tbody td:nth-child(1){display:none;}
+    thead th:nth-child(6),tbody td:nth-child(6){display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">SN</div>
+      <div>
+        <h1>ตรวจนับสต็อกสินค้า</h1>
+        <p id="sheetStatus">ยังไม่เชื่อมต่อ Google Sheet</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="refreshBtn" title="รีเฟรชข้อมูล">⟳</button>
+      <button class="icon-btn" id="themeBtn" title="สลับโหมดสี">◐</button>
+      <button class="icon-btn" id="settingsBtn" title="ตั้งค่าการเชื่อมต่อ">⚙</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <button class="stat active" data-key="all">
+      <span class="num" id="statAll">0</span>
+      <span class="lbl">สินค้าทั้งหมด</span>
+    </button>
+    <button class="stat" data-key="counted">
+      <span class="num" id="statCounted">0</span>
+      <span class="lbl">ตรวจนับแล้ว</span>
+    </button>
+    <button class="stat" data-key="pending">
+      <span class="num" id="statPending">0</span>
+      <span class="lbl">ยังไม่ตรวจนับ</span>
+    </button>
+  </div>
+
+  <div class="scanner">
+    <div class="scanner-head">
+      <h2>สแกนตรวจนับ</h2>
+      <div class="scan-toggle">
+        <button id="camTabBtn" class="on">กล้อง</button>
+        <button id="manualTabBtn">พิมพ์ / ยิงบาร์โค้ด</button>
+      </div>
+    </div>
+
+    <div id="reader-wrap">
+      <div id="reader"></div>
+      <div class="scan-frame"><div class="scan-line"></div></div>
+    </div>
+    <div class="cam-controls" id="camControls" style="display:none;">
+      <button class="pill-btn" id="camStartBtn">เปิดกล้อง</button>
+      <button class="pill-btn" id="camSwitchBtn">สลับกล้อง</button>
+      <button class="pill-btn" id="camStopBtn">ปิดกล้อง</button>
+    </div>
+
+    <div class="manual-row" id="manualRow">
+      <input type="text" id="manualInput" class="mono" placeholder="พิมพ์หรือยิง Serial Number แล้วกด Enter" autocomplete="off">
+      <button class="go-btn" id="manualGoBtn">ตรวจนับ</button>
+    </div>
+
+    <div id="feedback"></div>
+  </div>
+
+  <div class="table-head">
+    <h2 id="tableTitle">รายการสินค้าทั้งหมด</h2>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="count-tag" id="tableCount">0 รายการ</span>
+      <button class="reset-btn" id="resetBtn">ล้างค่าการตรวจนับ</button>
+    </div>
+  </div>
+
+  <div class="table-shell">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:52px;">ลำดับ</th>
+            <th>ชื่อสินค้า</th>
+            <th>รหัสสินค้า</th>
+            <th>Serial Number</th>
+            <th style="width:140px;">สถานะ</th>
+            <th style="width:150px;">เวลาตรวจนับ</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyState" style="display:none;">
+      ยังไม่มีข้อมูล — กดปุ่ม ⚙ เพื่อตั้งค่าการเชื่อมต่อ Google Sheet
+    </div>
+  </div>
+
+</div>
+
+<!-- Reset confirm modal -->
+<div class="modal-backdrop" id="resetModal">
+  <div class="modal">
+    <h3>ล้างค่าการตรวจนับทั้งหมด?</h3>
+    <p>สถานะของสินค้าทุกรายการจะถูกรีเซ็ตกลับเป็น "ยังไม่ตรวจนับ" ใน Google Sheet ไม่สามารถย้อนกลับได้</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="resetCancelBtn">ยกเลิก</button>
+      <button class="btn-danger" id="resetConfirmBtn">ยืนยันล้างค่า</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal">
+    <h3>ตั้งค่าการเชื่อมต่อ</h3>
+    <p>วาง URL ของ Google Apps Script Web App ที่ deploy จากไฟล์ Code.gs (ดูขั้นตอนใน README)</p>
+    <label for="apiUrlInput">Web App URL</label>
+    <input type="url" id="apiUrlInput" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    <div class="hint">URL นี้จะถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น</div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-ghost" id="settingsCancelBtn">ยกเลิก</button>
+      <button class="btn-danger" id="settingsSaveBtn" style="background:var(--ink);">บันทึกและเชื่อมต่อ</button>
+    </div>
+  </div>
+</div>
+
+<audio class="toast-audio" id="sndOk" src="https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/bell_ring.mp3" preload="auto"></audio>
+<audio class="toast-audio" id="sndWarn" src="https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/button_soft.mp3" preload="auto"></audio>
+<audio class="toast-audio" id="sndErr" src="https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/error_04.mp3" preload="auto"></audio>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- State ----------
+  let API_URL = localStorage.getItem("stockApiUrl") || "";
+  let items = []; // {index, name, code, serial, status}
+  let currentFilter = "all";
+  let html5QrCode = null;
+  let cameras = [];
+  let currentCamIndex = 0;
+  let cameraRunning = false;
+
+  const STATUS_COUNTED = "ตรวจนับแล้ว";
+  const STATUS_PENDING = "ยังไม่ตรวจนับ";
+
+  // ---------- Elements ----------
+  const el = (id) => document.getElementById(id);
+  const themeBtn = el("themeBtn");
+  const refreshBtn = el("refreshBtn");
+  const settingsBtn = el("settingsBtn");
+  const sheetStatus = el("sheetStatus");
+  const camTabBtn = el("camTabBtn");
+  const manualTabBtn = el("manualTabBtn");
+  const readerWrap = el("reader-wrap");
+  const camControls = el("camControls");
+  const manualRow = el("manualRow");
+  const manualInput = el("manualInput");
+  const manualGoBtn = el("manualGoBtn");
+  const feedback = el("feedback");
+  const tableBody = el("tableBody");
+  const tableCount = el("tableCount");
+  const tableTitle = el("tableTitle");
+  const emptyState = el("emptyState");
+  const resetBtn = el("resetBtn");
+  const resetModal = el("resetModal");
+  const resetCancelBtn = el("resetCancelBtn");
+  const resetConfirmBtn = el("resetConfirmBtn");
+  const settingsModal = el("settingsModal");
+  const apiUrlInput = el("apiUrlInput");
+  const settingsCancelBtn = el("settingsCancelBtn");
+  const settingsSaveBtn = el("settingsSaveBtn");
+
+  // ---------- Theme ----------
+  function initTheme(){
+    const saved = localStorage.getItem("stockTheme");
+    const theme = saved || "light";
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+  themeBtn.addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("stockTheme", next);
+  });
+  initTheme();
+
+  // ---------- Feedback banner + sound ----------
+  let feedbackTimer = null;
+  function playSound(kind){
+    try{
+      const map = {ok:"sndOk", warn:"sndWarn", err:"sndErr"};
+      const a = el(map[kind]);
+      if(a){ a.currentTime = 0; a.play().catch(()=>{}); }
+    }catch(e){}
+  }
+  function showFeedback(kind, msg){
+    feedback.className = "show " + kind;
+    feedback.textContent = msg;
+    playSound(kind);
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => { feedback.classList.remove("show"); }, 3200);
+  }
+
+  // ---------- Data fetch ----------
+  async function apiGet(action, params){
+    if(!API_URL){ throw new Error("no-api"); }
+    const qs = new URLSearchParams(Object.assign({action}, params||{})).toString();
+    const res = await fetch(API_URL + "?" + qs, { method: "GET" });
+    if(!res.ok) throw new Error("http-" + res.status);
+    return res.json();
+  }
+  async function apiPost(payload){
+    if(!API_URL){ throw new Error("no-api"); }
+    // text/plain avoids a CORS preflight against Apps Script
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error("http-" + res.status);
+    return res.json();
+  }
+
+  async function loadData(){
+    if(!API_URL){
+      sheetStatus.textContent = "ยังไม่เชื่อมต่อ Google Sheet";
+      renderEmpty();
+      return;
+    }
+    sheetStatus.textContent = "กำลังโหลดข้อมูล...";
+    try{
+      const data = await apiGet("list");
+      items = (data.items || []).map(r => ({
+        index: r.index, name: r.name, code: r.code, serial: String(r.serial||"").trim(),
+        status: r.status || STATUS_PENDING, countedAt: r.countedAt || ""
+      }));
+      sheetStatus.textContent = "เชื่อมต่อแล้ว · อัปเดตล่าสุด " + new Date().toLocaleTimeString("th-TH");
+      renderAll();
+    }catch(err){
+      sheetStatus.textContent = "เชื่อมต่อ Google Sheet ไม่สำเร็จ";
+      showFeedback("err", "โหลดข้อมูลไม่สำเร็จ ตรวจสอบ URL การเชื่อมต่อในหน้าตั้งค่า");
+    }
+  }
+
+  // ---------- Rendering ----------
+  function renderEmpty(){
+    tableBody.innerHTML = "";
+    emptyState.style.display = "block";
+    el("statAll").textContent = "0";
+    el("statCounted").textContent = "0";
+    el("statPending").textContent = "0";
+    tableCount.textContent = "0 รายการ";
+  }
+
+  function renderAll(){
+    const total = items.length;
+    const counted = items.filter(i => i.status === STATUS_COUNTED).length;
+    const pending = total - counted;
+    el("statAll").textContent = total;
+    el("statCounted").textContent = counted;
+    el("statPending").textContent = pending;
+
+    let list = items;
+    let title = "รายการสินค้าทั้งหมด";
+    if(currentFilter === "counted"){ list = items.filter(i => i.status === STATUS_COUNTED); title = "รายการที่ตรวจนับแล้ว"; }
+    if(currentFilter === "pending"){ list = items.filter(i => i.status !== STATUS_COUNTED); title = "รายการที่ยังไม่ตรวจนับ"; }
+    tableTitle.textContent = title;
+    tableCount.textContent = list.length + " รายการ";
+
+    emptyState.style.display = total === 0 ? "block" : "none";
+
+    tableBody.innerHTML = list.map(i => `
+      <tr>
+        <td class="code-cell">${escapeHtml(i.index)}</td>
+        <td>${escapeHtml(i.name)}</td>
+        <td class="code-cell">${escapeHtml(i.code)}</td>
+        <td class="code-cell">${escapeHtml(i.serial)}</td>
+        <td>${statusChip(i.status)}</td>
+        <td class="time-cell">${escapeHtml(i.countedAt || "—")}</td>
+      </tr>
+    `).join("");
+  }
+
+  function statusChip(status){
+    if(status === STATUS_COUNTED){
+      return `<span class="status-chip counted"><span class="dot"></span>ตรวจนับแล้ว</span>`;
+    }
+    return `<span class="status-chip pending"><span class="dot"></span>ยังไม่ตรวจนับ</span>`;
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  document.querySelectorAll(".stat").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".stat").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentFilter = btn.dataset.key;
+      renderAll();
+    });
+  });
+
+  // ---------- Scan processing ----------
+  let processing = false;
+  let lastScan = { serial: "", time: 0 };
+  const SCAN_COOLDOWN_MS = 2000;
+
+  async function processScan(rawValue){
+    const serial = String(rawValue || "").trim();
+    if(!serial || processing) return;
+
+    const now = Date.now();
+    if(serial === lastScan.serial && (now - lastScan.time) < SCAN_COOLDOWN_MS) return;
+    lastScan = { serial, time: now };
+
+    if(!API_URL){ showFeedback("err", "กรุณาตั้งค่าการเชื่อมต่อ Google Sheet ก่อน (ปุ่ม ⚙)"); return; }
+
+    const match = items.find(i => i.serial === serial);
+    if(!match){
+      showFeedback("err", `ไม่พบข้อมูลสินค้าในระบบ (S/N: ${serial})`);
+      return;
+    }
+    if(match.status === STATUS_COUNTED){
+      showFeedback("warn", `สินค้านี้ถูกตรวจนับไปแล้ว — ${match.name}`);
+      return;
+    }
+
+    processing = true;
+    try{
+      const res = await apiPost({ action: "count", serial: serial });
+      if(res && res.ok){
+        match.status = STATUS_COUNTED;
+        match.countedAt = res.countedAt || match.countedAt;
+        renderAll();
+        showFeedback("ok", `ตรวจนับสำเร็จ — ${match.name}`);
+      }else{
+        showFeedback("err", res && res.message ? res.message : "บันทึกข้อมูลไม่สำเร็จ");
+      }
+    }catch(err){
+      showFeedback("err", "เชื่อมต่อ Google Sheet ไม่สำเร็จ ลองใหม่อีกครั้ง");
+    }finally{
+      processing = false;
+    }
+  }
+
+  manualGoBtn.addEventListener("click", () => {
+    processScan(manualInput.value);
+    manualInput.value = "";
+    manualInput.focus();
+  });
+  manualInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      processScan(manualInput.value);
+      manualInput.value = "";
+    }
+  });
+
+  // ---------- Tabs: camera / manual ----------
+  function showManualTab(){
+    manualTabBtn.classList.add("on");
+    camTabBtn.classList.remove("on");
+    manualRow.style.display = "flex";
+    readerWrap.classList.remove("show");
+    camControls.style.display = "none";
+    stopCamera();
+    setTimeout(() => manualInput.focus(), 50);
+  }
+  function showCamTab(){
+    camTabBtn.classList.add("on");
+    manualTabBtn.classList.remove("on");
+    manualRow.style.display = "none";
+    readerWrap.classList.add("show");
+    camControls.style.display = "flex";
+  }
+  camTabBtn.addEventListener("click", showCamTab);
+  manualTabBtn.addEventListener("click", showManualTab);
+
+  // ---------- Camera scanning ----------
+  // Formats: both QR/2D codes and common 1D barcodes used on product labels
+  function getSupportedFormats_(){
+    const F = window.Html5QrcodeSupportedFormats;
+    if(!F) return undefined;
+    return [
+      F.QR_CODE, F.AZTEC, F.DATA_MATRIX, F.PDF_417,
+      F.CODE_128, F.CODE_39, F.CODE_93, F.CODABAR,
+      F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.RSS_14
+    ];
+  }
+
+  async function initCameraList(){
+    try{
+      cameras = await Html5Qrcode.getCameras();
+    }catch(e){
+      cameras = [];
+    }
+  }
+
+  async function startCamera(){
+    if(cameraRunning) return;
+    if(!html5QrCode){
+      html5QrCode = new Html5Qrcode("reader", {
+        formatsToSupport: getSupportedFormats_(),
+        verbose: false
+      });
+    }
+    if(cameras.length === 0){ await initCameraList(); }
+    if(cameras.length === 0){
+      showFeedback("err", "ไม่พบกล้องบนอุปกรณ์นี้");
+      return;
+    }
+    // prefer back camera on first start
+    if(currentCamIndex === 0){
+      const backIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
+      if(backIdx >= 0) currentCamIndex = backIdx;
+    }
+    const cameraId = cameras[currentCamIndex].id;
+    try{
+      await html5QrCode.start(
+        cameraId,
+        {
+          fps: 20,
+          qrbox: { width: 270, height: 160 },
+          aspectRatio: 1.333334,
+          disableFlip: false,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        },
+        (decodedText) => { processScan(decodedText); },
+        () => {}
+      );
+      cameraRunning = true;
+    }catch(e){
+      showFeedback("err", "เปิดกล้องไม่สำเร็จ กรุณาอนุญาตการใช้งานกล้อง");
+    }
+  }
+
+  async function stopCamera(){
+    if(html5QrCode && cameraRunning){
+      try{ await html5QrCode.stop(); await html5QrCode.clear(); }catch(e){}
+      cameraRunning = false;
+    }
+  }
+
+  async function switchCamera(){
+    if(cameras.length < 2){ showFeedback("warn", "มีกล้องเดียวบนอุปกรณ์นี้"); return; }
+    await stopCamera();
+    currentCamIndex = (currentCamIndex + 1) % cameras.length;
+    await startCamera();
+  }
+
+  el("camStartBtn").addEventListener("click", startCamera);
+  el("camStopBtn").addEventListener("click", stopCamera);
+  el("camSwitchBtn").addEventListener("click", switchCamera);
+
+  // ---------- Reset ----------
+  resetBtn.addEventListener("click", () => resetModal.classList.add("show"));
+  resetCancelBtn.addEventListener("click", () => resetModal.classList.remove("show"));
+  resetConfirmBtn.addEventListener("click", async () => {
+    resetModal.classList.remove("show");
+    try{
+      const res = await apiPost({ action: "reset" });
+      if(res && res.ok){
+        showFeedback("ok", "ล้างค่าการตรวจนับทั้งหมดเรียบร้อย");
+        await loadData();
+      }else{
+        showFeedback("err", "ล้างค่าไม่สำเร็จ");
+      }
+    }catch(e){
+      showFeedback("err", "เชื่อมต่อ Google Sheet ไม่สำเร็จ");
+    }
+  });
+
+  // ---------- Settings ----------
+  settingsBtn.addEventListener("click", () => {
+    apiUrlInput.value = API_URL;
+    settingsModal.classList.add("show");
+  });
+  settingsCancelBtn.addEventListener("click", () => settingsModal.classList.remove("show"));
+  settingsSaveBtn.addEventListener("click", () => {
+    API_URL = apiUrlInput.value.trim();
+    localStorage.setItem("stockApiUrl", API_URL);
+    settingsModal.classList.remove("show");
+    loadData();
+  });
+
+  // ---------- Refresh ----------
+  refreshBtn.addEventListener("click", loadData);
+
+  // ---------- Init ----------
+  showCamTab();
+  loadData();
+  if(!API_URL){ setTimeout(() => settingsModal.classList.add("show"), 400); }
+})();
+</script>
+</body>
+</html>
