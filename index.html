@@ -521,7 +521,7 @@
   // ---------- Scan processing ----------
   let processing = false;
   let lastScan = { serial: "", time: 0 };
-  const SCAN_COOLDOWN_MS = 2000;
+  const SCAN_COOLDOWN_MS = 1500;
 
   async function processScan(rawValue){
     const serial = String(rawValue || "").trim();
